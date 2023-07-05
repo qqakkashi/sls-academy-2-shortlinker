@@ -1,0 +1,114 @@
+service: sls-academy-2-shortlinker
+frameworkVersion: "3"
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: eu-central-1
+  environment:
+    DYNAMODB_ENDPOINT: http://localhost:8000
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:Query
+            - dynamodb:Scan
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+          Resource:
+            - "Fn::GetAtt": [UsersTable, Arn]
+            - "Fn::GetAtt": [TokensTable, Arn]
+
+resources:
+  Resources:
+    UsersTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: users
+        ProvisionedThroughput:
+          ReadCapacityUnits: 5
+          WriteCapacityUnits: 5
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+          - AttributeName: email
+            AttributeType: S
+          - AttributeName: password
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: emailAndPassword
+            KeySchema:
+              - AttributeName: email
+                KeyType: HASH
+              - AttributeName: password
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+            ProvisionedThroughput:
+              ReadCapacityUnits: 5
+              WriteCapacityUnits: 5
+
+    TokensTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: tokens
+        ProvisionedThroughput:
+          ReadCapacityUnits: 5
+          WriteCapacityUnits: 5
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+          - AttributeName: access_token
+            AttributeType: S
+          - AttributeName: refresh_token
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: accessAndRefreshTokens
+            KeySchema:
+              - AttributeName: access_token
+                KeyType: HASH
+              - AttributeName: refresh_token
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+            ProvisionedThroughput:
+              ReadCapacityUnits: 5
+              WriteCapacityUnits: 5
+
+plugins:
+  - serverless-plugin-typescript
+  - serverless-offline
+  - serverless-dotenv-plugin
+
+custom:
+  serverless-offline:
+    httpPort: 5000
+
+package:
+  individually: true
+
+functions:
+  signup:
+    handler: app/handler.signup
+    events:
+      - http:
+          method: post
+          path: auth/sign-up
+    environment:
+      USERS_TABLE: users
+      TOKENS_TABLE: tokens
+  app:
+    handler: app/handler.app
+    events:
+      - http:
+          method: get
+          path: /
