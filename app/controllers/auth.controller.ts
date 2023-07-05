@@ -18,8 +18,7 @@ class AuthController {
 
   async app(event: any): Promise<Message> {
     try {
-      console.log("Users Table:", process.env.USERS_TABLE);
-      return MessageUtil.success({ tables: process.env.USERS_TABLE });
+      return MessageUtil.success({ message: "server wokring" });
     } catch (error: any) {
       console.error("Error listing tables:", error as AWSError);
       return MessageUtil.error(error.code, error.message);
