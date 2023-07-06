@@ -98,7 +98,7 @@ package:
 
 functions:
   signup:
-    handler: app/router.signup
+    handler: app/router/auth/handler.signup
     events:
       - http:
           method: post
@@ -107,7 +107,7 @@ functions:
       USERS_TABLE: users
       TOKENS_TABLE: tokens
   singin:
-    handler: app/router.signin
+    handler: app/router/auth/handler.signin
     events:
       - http:
           method: post
@@ -116,7 +116,7 @@ functions:
       USERS_TABLE: users
       TOKENS_TABLE: tokens
   app:
-    handler: app/router.app
+    handler: app/router/app/handler.app
     events:
       - http:
           method: get
