@@ -8,17 +8,17 @@ class AuthService {
   async signUp(email: string, password: string): Promise<any> {
     try {
       const uuid: string = uuidv4();
+      const user = await validateEmail(uuid, email, password);
+      if (!user) {
+        throw {
+          code: 409,
+          message: `Email:${email} is not email or password lenght less than 8 digits`,
+        };
+      }
       const hashedPassword = bcrypt.hashSync(
         password,
         bcrypt.genSaltSync(+process.env.PASSWORD_SALT_DATA!)
       );
-      const user = await validateEmail(uuid, email, hashedPassword);
-      if (!user) {
-        throw {
-          code: 409,
-          message: `Email:${email} is not email`,
-        };
-      }
       const tokens = tokenService.generateTokens(uuid);
       const candidateUser = await dynamoDb
         .scan({
@@ -48,63 +48,63 @@ class AuthService {
 
       return { user, tokens };
     } catch (error: any) {
-      console.error(error);
       throw error;
     }
   }
 
   async signIn(email: string, password: string): Promise<any> {
-    const candidateUser = await dynamoDb
-      .scan({
-        TableName: process.env.USERS_TABLE!,
-        FilterExpression: "email = :email",
-        ExpressionAttributeValues: {
-          ":email": email,
-        },
-      })
-      .promise();
-    if (candidateUser.Count! < 1) {
-      throw {
-        code: 400,
-        message: `No user with email:${email}, please check your email`,
-      };
-    }
-    const userHashedPassword = candidateUser.Items?.[0].password;
-    const userId = candidateUser.Items?.[0].id;
+    try {
+      const candidateUser = await dynamoDb
+        .scan({
+          TableName: process.env.USERS_TABLE!,
+          FilterExpression: "email = :email",
+          ExpressionAttributeValues: {
+            ":email": email,
+          },
+        })
+        .promise();
+      if (candidateUser.Count! < 1) {
+        throw {
+          code: 400,
+          message: `No user with email:${email}, please check your email`,
+        };
+      }
+      const userHashedPassword = candidateUser.Items?.[0].password;
 
-    const comparePasswords = bcrypt.compareSync(password, userHashedPassword);
-    if (!comparePasswords) {
-      throw {
-        code: 400,
-        message: `Password for email:${email} is incorrecnt`,
-      };
-    }
-    const newTokens = tokenService.generateTokens(userId);
+      const userId = candidateUser.Items?.[0].id;
 
-    const insertTokens = await dynamoDb
-      .update({
-        TableName: process.env.TOKENS_TABLE!,
-        Key: {
-          id: userId,
-        },
-        UpdateExpression:
-          "SET access_token = :access_token, refresh_token = :refresh_token",
-        ExpressionAttributeValues: {
-          ":access_token": newTokens.access_token,
-          ":refresh_token": newTokens.refresh_token,
-        },
-        ReturnValues: "ALL_NEW",
-      })
-      .promise();
-    const userAccessToken = newTokens.access_token;
-    const userRefreshToken = newTokens.refresh_token;
-    return {
-      user: { id: userId, email },
-      tokens: {
-        access_token: userAccessToken,
-        refresh_token: userRefreshToken,
-      },
-    };
+      const comparePasswords = bcrypt.compareSync(password, userHashedPassword);
+
+      if (!comparePasswords) {
+        throw {
+          code: 400,
+          message: `Password for email:${email} is incorrecnt`,
+        };
+      }
+      const tokens = tokenService.generateTokens(userId);
+      const insertTokens = await dynamoDb
+        .update({
+          TableName: process.env.TOKENS_TABLE!,
+          Key: {
+            id: userId,
+          },
+          UpdateExpression:
+            "SET access_token = :access_token, refresh_token = :refresh_token",
+          ExpressionAttributeValues: {
+            ":access_token": tokens.access_token,
+            ":refresh_token": tokens.refresh_token,
+          },
+          ReturnValues: "ALL_NEW",
+        })
+        .promise();
+      const user = await validateEmail(userId, email, password);
+      return {
+        user,
+        tokens,
+      };
+    } catch (error: any) {
+      throw error;
+    }
   }
 }
 
