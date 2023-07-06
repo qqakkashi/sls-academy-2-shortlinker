@@ -5,13 +5,13 @@ export class User {
   @IsEmail()
   email!: string;
   @MinLength(8)
-  password!: string;
+  password?: string;
 }
 
 export const validateEmail = async (
   id: string,
   email: string,
-  password: string
+  password?: string
 ): Promise<User | boolean> => {
   const user = new User();
   user.id = id;

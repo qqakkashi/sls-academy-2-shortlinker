@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "scripts": {
     "build": "npx tsc",
-    "dev": "sls offline"
+    "dev": "sls offline",
+    "deploy": "sls deploy"
   },
   "description": "",
   "dependencies": {

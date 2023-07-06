@@ -25,8 +25,8 @@ export interface Message {
 }
 
 export class MessageUtil {
-  static success(data: object) {
-    const result = new Result(200, "success", data);
+  static success(code: number, data: object) {
+    const result = new Result(code, "success", data);
 
     return result.bodyToString();
   }
