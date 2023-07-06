@@ -45,16 +45,7 @@ class AuthService {
           },
         })
         .promise();
-      const insertTokens = await dynamoDb
-        .put({
-          TableName: process.env.TOKENS_TABLE!,
-          Item: {
-            id: uuid,
-            access_token: tokens.access_token,
-            refresh_token: tokens.refresh_token,
-          },
-        })
-        .promise();
+
       return { user, tokens };
     } catch (error: any) {
       console.error(error);
@@ -88,18 +79,25 @@ class AuthService {
         message: `Password for email:${email} is incorrecnt`,
       };
     }
-    const candidateTokens = await dynamoDb
-      .scan({
+    const newTokens = tokenService.generateTokens(userId);
+
+    const insertTokens = await dynamoDb
+      .update({
         TableName: process.env.TOKENS_TABLE!,
-        FilterExpression: "id = :id",
-        ExpressionAttributeValues: {
-          ":id": userId,
+        Key: {
+          id: userId,
         },
+        UpdateExpression:
+          "SET access_token = :access_token, refresh_token = :refresh_token",
+        ExpressionAttributeValues: {
+          ":access_token": newTokens.access_token,
+          ":refresh_token": newTokens.refresh_token,
+        },
+        ReturnValues: "ALL_NEW",
       })
       .promise();
-    console.error(candidateTokens);
-    const userAccessToken = candidateTokens.Items?.[0].access_token;
-    const userRefreshToken = candidateTokens.Items?.[0].refresh_token;
+    const userAccessToken = newTokens.access_token;
+    const userRefreshToken = newTokens.refresh_token;
     return {
       user: { id: userId, email },
       tokens: {
