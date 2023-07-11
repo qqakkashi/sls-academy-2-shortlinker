@@ -5,8 +5,11 @@ provider:
   name: aws
   runtime: nodejs18.x
   region: eu-central-1
-  environment:
-    DYNAMODB_ENDPOINT: http://localhost:8000
+  httpApi:
+    authorizers:
+      verify-token:
+        type: request
+        functionName: verify-token
   iam:
     role:
       statements:
@@ -97,27 +100,36 @@ package:
   individually: true
 
 functions:
+  verify-token:
+    handler: app/functions/auth/verify.handler
   signup:
-    handler: app/router/auth/handler.signup
+    handler: app/functions/auth/authorize.handler
     events:
       - http:
           method: post
           path: auth/sign-up
+          cors: true
     environment:
       USERS_TABLE: users
       TOKENS_TABLE: tokens
   singin:
-    handler: app/router/auth/handler.signin
+    handler: app/functions/auth/login.handler
     events:
       - http:
           method: post
           path: auth/sign-in
+          cors: true
     environment:
       USERS_TABLE: users
       TOKENS_TABLE: tokens
+
   app:
-    handler: app/router/app/handler.app
+    handler: app/functions/app/app.handler
     events:
       - http:
           method: get
           path: /
+          cors: true
+          # authorizer:
+          #   name: verify-token
+          #   identitySource: method.request.header.Authorization
