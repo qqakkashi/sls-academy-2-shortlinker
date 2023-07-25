@@ -3,3 +3,5 @@ node_modules
 .env
 .build
 Serverless_ShortLinker_Product_Specs.pdf
+asd.txt
+.DS_Store

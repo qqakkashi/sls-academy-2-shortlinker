@@ -10,6 +10,7 @@ export const handler = async (event: any) => {
     const response = await signIn(email, password);
     return MessageUtil.success(200, response);
   } catch (error: any) {
+    console.error(error);
     return MessageUtil.error(error.code, error.message);
   }
 };

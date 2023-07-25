@@ -31,7 +31,7 @@ export class MessageUtil {
     return result.bodyToString();
   }
 
-  static error(code: number = 1000, message: string) {
+  static error(code: number = 1000, message: any) {
     const result = new Result(code, "failed", message);
     return result.bodyToString();
   }

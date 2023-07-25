@@ -1,3 +1,6 @@
-import { DynamoDB } from "aws-sdk";
+import { DynamoDB } from "@aws-sdk/client-dynamodb";
+import dotenv from "dotenv";
 
-export const dynamoDb = new DynamoDB.DocumentClient();
+dotenv.config();
+
+export const dynamoDb = new DynamoDB({ region: process.env.REGION! });

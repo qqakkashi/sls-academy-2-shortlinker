@@ -1,5 +1,27 @@
 service: sls-academy-2-shortlinker
+app: sls-academy-2-shortlinker
 frameworkVersion: "3"
+
+useDotenv: true
+
+plugins:
+  - serverless-esbuild
+  - serverless-offline
+  - serverless-dotenv-plugin
+  - serverless-iam-roles-per-function
+
+package:
+  individually: true
+
+custom:
+  serverless-offline:
+    httpPort: 3000
+  esbuild:
+    bundle: true
+    minify: false
+    target: "node18"
+    platform: "node"
+    concurrency: 10
 
 provider:
   name: aws
@@ -10,30 +32,89 @@ provider:
       verify-token:
         type: request
         functionName: verify-token
-  iam:
-    role:
-      statements:
-        - Effect: Allow
-          Action:
-            - dynamodb:Query
-            - dynamodb:Scan
-            - dynamodb:GetItem
-            - dynamodb:PutItem
-            - dynamodb:UpdateItem
-            - dynamodb:DeleteItem
-          Resource:
-            - "Fn::GetAtt": [UsersTable, Arn]
-            - "Fn::GetAtt": [TokensTable, Arn]
+  environment:
+    ACCOUNT_ID: ${env:ACCOUNT_ID}
+    LINKS_TABLE: links
+    USERS_TABLE: users
+    TOKENS_TABLE: tokens
 
 resources:
   Resources:
+    EventBridgerRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: event-bridger-role
+        AssumeRolePolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service:
+                  - lambda.amazonaws.com
+                  - events.amazonaws.com
+                  - scheduler.amazonaws.com
+              Action:
+                - sts:AssumeRole
+        Policies:
+          - PolicyName: LambdaInvokeAccess
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - lambda:InvokeFunction
+                  Resource: "*"
+
+    ShortlinkerQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ShortlinkerQueue
+
+    ShortUrlEvent:
+      Type: AWS::Events::Rule
+      Properties:
+        EventPattern:
+          source:
+            - "deactivator"
+          detail-type:
+            - "scheduled-deactivator"
+        Targets:
+          - Arn: arn:aws:lambda:${self:provider.region}:${self:provider.environment.ACCOUNT_ID}:function:scheduleddeactivatelink
+            Id: "DeactivateTarget"
+
+    LinksTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: links
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+          - AttributeName: email
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: emailAndLinksId
+            KeySchema:
+              - AttributeName: email
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+            ProvisionedThroughput:
+              ReadCapacityUnits: 10
+              WriteCapacityUnits: 10
+        ProvisionedThroughput:
+          ReadCapacityUnits: 10
+          WriteCapacityUnits: 10
+
     UsersTable:
       Type: AWS::DynamoDB::Table
       Properties:
         TableName: users
         ProvisionedThroughput:
-          ReadCapacityUnits: 5
-          WriteCapacityUnits: 5
+          ReadCapacityUnits: 10
+          WriteCapacityUnits: 10
         AttributeDefinitions:
           - AttributeName: id
             AttributeType: S
@@ -54,16 +135,16 @@ resources:
             Projection:
               ProjectionType: ALL
             ProvisionedThroughput:
-              ReadCapacityUnits: 5
-              WriteCapacityUnits: 5
+              ReadCapacityUnits: 10
+              WriteCapacityUnits: 10
 
     TokensTable:
       Type: AWS::DynamoDB::Table
       Properties:
         TableName: tokens
         ProvisionedThroughput:
-          ReadCapacityUnits: 5
-          WriteCapacityUnits: 5
+          ReadCapacityUnits: 10
+          WriteCapacityUnits: 10
         AttributeDefinitions:
           - AttributeName: id
             AttributeType: S
@@ -84,24 +165,13 @@ resources:
             Projection:
               ProjectionType: ALL
             ProvisionedThroughput:
-              ReadCapacityUnits: 5
-              WriteCapacityUnits: 5
-
-plugins:
-  - serverless-plugin-typescript
-  - serverless-offline
-  - serverless-dotenv-plugin
-
-custom:
-  serverless-offline:
-    httpPort: 5000
-
-package:
-  individually: true
+              ReadCapacityUnits: 10
+              WriteCapacityUnits: 10
 
 functions:
   verify-token:
     handler: app/functions/auth/verify.handler
+
   signup:
     handler: app/functions/auth/authorize.handler
     events:
@@ -109,9 +179,14 @@ functions:
           method: post
           path: auth/sign-up
           cors: true
-    environment:
-      USERS_TABLE: users
-      TOKENS_TABLE: tokens
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - "dynamodb:*"
+        Resource:
+          - !GetAtt UsersTable.Arn
+          - !GetAtt TokensTable.Arn
+
   singin:
     handler: app/functions/auth/login.handler
     events:
@@ -119,9 +194,93 @@ functions:
           method: post
           path: auth/sign-in
           cors: true
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - "dynamodb:*"
+        Resource:
+          - !GetAtt UsersTable.Arn
+          - !GetAtt TokensTable.Arn
+
+  createlink:
+    handler: app/functions/link/createLink.handler
+    events:
+      # - sqs:
+      #     arn: arn:aws:sqs:${self:provider.region}:#{AWS::AccountId}:ShortlinkerQueue
+      - http:
+          method: post
+          path: link/link
+          cors: true
+          authorizer:
+            name: verify-token
+            identitySource: method.request.header.Authorization
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - "dynamodb:*"
+          - "sqs:SendMessage"
+          - "events:PutEvents"
+          - "lambda:InvokeFunction"
+          - "iam:PassRole"
+          - "scheduler:CreateSchedule"
+        Resource: "*"
+
+  scheduleddeactivatelink:
+    handler: app/functions/link/scheduledDeactivateLink.handler
+    events:
+      - eventBridge:
+          eventBus: default
+          pattern:
+            source:
+              - "deactivator"
+            detail-type:
+              - "scheduled-deactivator"
+    environment:
+      LINKS_TABLE: links
+    iamRoleStatementsName: scheduler-for-links
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - "dynamodb:*"
+        Resource:
+          - !GetAtt LinksTable.Arn
+
+  deactivatelink:
+    handler: app/functions/link/deactivateLink.handler
+    events:
+      - http:
+          method: delete
+          path: link/link
+          cors: true
+          authorizer:
+            name: verify-token
+            identitySource: method.request.header.Authorization
     environment:
       USERS_TABLE: users
-      TOKENS_TABLE: tokens
+      LINKS_TABLE: links
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - "dynamodb:*"
+        Resource:
+          - !GetAtt UsersTable.Arn
+          - !GetAtt LinksTable.Arn
+
+  redirectlink:
+    handler: app/functions/link/redirectLink.handler
+    events:
+      - http:
+          method: get
+          path: /{shortlink}
+          cors: true
+    environment:
+      LINKS_TABLE: links
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - "dynamodb:*"
+        Resource:
+          - !GetAtt LinksTable.Arn
 
   app:
     handler: app/functions/app/app.handler
@@ -130,6 +289,3 @@ functions:
           method: get
           path: /
           cors: true
-          # authorizer:
-          #   name: verify-token
-          #   identitySource: method.request.header.Authorization

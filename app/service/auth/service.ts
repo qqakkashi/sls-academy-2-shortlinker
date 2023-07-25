@@ -3,47 +3,69 @@ import { generateTokens } from "../token/service";
 import { v4 as uuidv4 } from "uuid";
 import { dynamoDb } from "../../config/db.config";
 import { validateEmail } from "../../model/dto/user.dto";
+import {
+  PutItemCommand,
+  ScanCommand,
+  UpdateItemCommand,
+} from "@aws-sdk/client-dynamodb";
 
 export const signUp = async (email: string, password: string): Promise<any> => {
   try {
     const uuid: string = uuidv4();
     const user = await validateEmail(uuid, email, password);
+
     if (!user) {
       throw {
         code: 409,
         message: `Email:${email} is not email or password lenght less than 8 digits`,
       };
     }
+
     const hashedPassword = bcrypt.hashSync(
       password,
       bcrypt.genSaltSync(+process.env.PASSWORD_SALT_DATA!)
     );
+
     const tokens = generateTokens({ uuid, email, hashedPassword });
-    const candidateUser = await dynamoDb
-      .scan({
-        TableName: process.env.USERS_TABLE!,
-        FilterExpression: "email = :email",
-        ExpressionAttributeValues: {
-          ":email": email,
-        },
-      })
-      .promise();
+
+    const scanCommandToFindCandidateUser: ScanCommand = new ScanCommand({
+      TableName: process.env.USERS_TABLE!,
+      FilterExpression: "email = :email",
+      ExpressionAttributeValues: {
+        ":email": { S: email },
+      },
+    });
+
+    const candidateUser = await dynamoDb.send(scanCommandToFindCandidateUser);
+
     if (candidateUser.Count! >= 1) {
       throw {
         code: 409,
         message: `User with this email:${email} already exist`,
       };
     }
-    const insertUser = await dynamoDb
-      .put({
-        TableName: process.env.USERS_TABLE!,
-        Item: {
-          id: uuid,
-          email: email,
-          password: hashedPassword,
-        },
-      })
-      .promise();
+
+    const putCommantForInsertTokens: PutItemCommand = new PutItemCommand({
+      TableName: process.env.TOKENS_TABLE!,
+      Item: {
+        id: { S: uuid },
+        access_token: { S: tokens.access_token },
+        refresh_token: { S: tokens.refresh_token },
+      },
+    });
+
+    await dynamoDb.send(putCommantForInsertTokens);
+
+    const putCommantForInsertUser: PutItemCommand = new PutItemCommand({
+      TableName: process.env.USERS_TABLE!,
+      Item: {
+        id: { S: uuid },
+        email: { S: email },
+        password: { S: hashedPassword },
+      },
+    });
+
+    await dynamoDb.send(putCommantForInsertUser);
 
     return { user, tokens };
   } catch (error: any) {
@@ -53,24 +75,26 @@ export const signUp = async (email: string, password: string): Promise<any> => {
 
 export const signIn = async (email: string, password: string): Promise<any> => {
   try {
-    const candidateUser = await dynamoDb
-      .scan({
-        TableName: process.env.USERS_TABLE!,
-        FilterExpression: "email = :email",
-        ExpressionAttributeValues: {
-          ":email": email,
-        },
-      })
-      .promise();
+    const scanCommandToFindCandidateUser: ScanCommand = new ScanCommand({
+      TableName: process.env.USERS_TABLE!,
+      FilterExpression: "email = :email",
+      ExpressionAttributeValues: {
+        ":email": { S: email },
+      },
+    });
+
+    const candidateUser = await dynamoDb.send(scanCommandToFindCandidateUser);
+
     if (candidateUser.Count! < 1) {
       throw {
         code: 400,
         message: `No user with email:${email}, please check your email`,
       };
     }
-    const userHashedPassword = candidateUser.Items?.[0].password;
 
-    const userId = candidateUser.Items?.[0].id as string;
+    const userHashedPassword = candidateUser.Items![0].password.S!;
+
+    const userId = candidateUser.Items![0].id.S!;
 
     const comparePasswords = bcrypt.compareSync(password, userHashedPassword);
 
@@ -85,21 +109,24 @@ export const signIn = async (email: string, password: string): Promise<any> => {
       email,
       hashedPassword: userHashedPassword,
     });
-    const insertTokens = await dynamoDb
-      .update({
+
+    const updateCommdandForInsertTokens: UpdateItemCommand =
+      new UpdateItemCommand({
         TableName: process.env.TOKENS_TABLE!,
         Key: {
-          id: userId,
+          id: { S: userId },
         },
         UpdateExpression:
           "SET access_token = :access_token, refresh_token = :refresh_token",
         ExpressionAttributeValues: {
-          ":access_token": tokens.access_token,
-          ":refresh_token": tokens.refresh_token,
+          ":access_token": { S: tokens.access_token },
+          ":refresh_token": { S: tokens.refresh_token },
         },
         ReturnValues: "ALL_NEW",
-      })
-      .promise();
+      });
+
+    await dynamoDb.send(updateCommdandForInsertTokens);
+
     const user = await validateEmail(userId, email, password);
     return {
       user,
