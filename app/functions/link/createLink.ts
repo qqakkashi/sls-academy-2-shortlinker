@@ -8,6 +8,7 @@ import dotenv from "dotenv";
 import { linkDeactivateService } from "../../service/link/service";
 import { PutItemCommand, ScanCommand } from "@aws-sdk/client-dynamodb";
 import { SendMessageCommand } from "@aws-sdk/client-sqs";
+import { sendSQSMessage } from "../../service/sqs/service";
 
 dotenv.config();
 export const handler = async (event: any) => {
@@ -62,18 +63,23 @@ export const handler = async (event: any) => {
     await dynamoDb.send(putNewShowrtLinkCommand);
 
     if (!oneTimeLink) {
-      await linkDeactivateService(linkId, new Date(expiresDate).toISOString());
+      await linkDeactivateService(
+        linkId,
+        user!.email,
+        new Date(expiresDate).toISOString()
+      );
+      await sendSQSMessage({
+        email: user!.email,
+        message: `Link with id ${linkId} will be deactivated in ${expiresDate.toString()}`,
+      });
     }
 
-    const sendSQSMessageCommand: SendMessageCommand = new SendMessageCommand({
-      MessageBody: JSON.stringify(
-        `Link ${link} will be deactivated in ${expiresDate.toString()}`
-      ),
-      QueueUrl: `https://sqs.${process.env.REGION!}.amazonaws.com/${process.env
-        .ACCOUNT_ID!}/${process.env.QUEUE_NAME!}`,
-    });
-
-    await sqsClient.send(sendSQSMessageCommand);
+    if (oneTimeLink) {
+      await sendSQSMessage({
+        email: user!.email,
+        message: `Link with id ${linkId} will be deactivated after one redirect`,
+      });
+    }
 
     return {
       statusCode: 201,
@@ -82,7 +88,7 @@ export const handler = async (event: any) => {
         data: {
           link_id: linkId,
           full_link: link,
-          short_link: shortLink,
+          short_link: `https://p3ip1pz49f.execute-api.eu-central-1.amazonaws.com/dev/${shortLink}`,
         },
       }),
     };

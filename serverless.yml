@@ -79,7 +79,7 @@ resources:
           detail-type:
             - "scheduled-deactivator"
         Targets:
-          - Arn: arn:aws:lambda:${self:provider.region}:${self:provider.environment.ACCOUNT_ID}:function:scheduleddeactivatelink
+          - Arn: arn:aws:lambda:${self:provider.region}:${self:provider.environment.ACCOUNT_ID}:function:scheduleddeactivate
             Id: "DeactivateTarget"
 
     LinksTable:
@@ -172,6 +172,19 @@ functions:
   verify-token:
     handler: app/functions/auth/verify.handler
 
+  sendemail:
+    handler: app/functions/app/sendEmail.handler
+    events:
+      - sqs:
+          arn: arn:aws:sqs:${self:provider.region}:${self:provider.environment.ACCOUNT_ID}:ShortlinkerQueue
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - "dynamodb:*"
+          - "lambda:InvokeFunction"
+          - "ses:*"
+        Resource: "*"
+
   signup:
     handler: app/functions/auth/authorize.handler
     events:
@@ -205,8 +218,6 @@ functions:
   createlink:
     handler: app/functions/link/createLink.handler
     events:
-      # - sqs:
-      #     arn: arn:aws:sqs:${self:provider.region}:#{AWS::AccountId}:ShortlinkerQueue
       - http:
           method: post
           path: link/link
@@ -225,7 +236,7 @@ functions:
           - "scheduler:CreateSchedule"
         Resource: "*"
 
-  scheduleddeactivatelink:
+  scheduleddeactivate:
     handler: app/functions/link/scheduledDeactivateLink.handler
     events:
       - eventBridge:
@@ -237,13 +248,12 @@ functions:
               - "scheduled-deactivator"
     environment:
       LINKS_TABLE: links
-    iamRoleStatementsName: scheduler-for-links
     iamRoleStatements:
       - Effect: Allow
         Action:
           - "dynamodb:*"
-        Resource:
-          - !GetAtt LinksTable.Arn
+          - "sqs:SendMessage"
+        Resource: "*"
 
   deactivatelink:
     handler: app/functions/link/deactivateLink.handler
@@ -262,9 +272,8 @@ functions:
       - Effect: Allow
         Action:
           - "dynamodb:*"
-        Resource:
-          - !GetAtt UsersTable.Arn
-          - !GetAtt LinksTable.Arn
+          - "sqs:SendMessage"
+        Resource: "*"
 
   redirectlink:
     handler: app/functions/link/redirectLink.handler

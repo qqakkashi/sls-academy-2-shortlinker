@@ -67,7 +67,7 @@ export const signUp = async (email: string, password: string): Promise<any> => {
 
     await dynamoDb.send(putCommantForInsertUser);
 
-    return { user, tokens };
+    return { user };
   } catch (error: any) {
     throw error;
   }
