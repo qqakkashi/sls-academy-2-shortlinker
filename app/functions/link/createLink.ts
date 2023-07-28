@@ -80,18 +80,11 @@ export const handler = async (event: any) => {
         message: `Link with id ${linkId} will be deactivated after one redirect`,
       });
     }
-
-    return {
-      statusCode: 201,
-      body: JSON.stringify({
-        success: true,
-        data: {
-          link_id: linkId,
-          full_link: link,
-          short_link: `https://p3ip1pz49f.execute-api.eu-central-1.amazonaws.com/dev/${shortLink}`,
-        },
-      }),
-    };
+    return MessageUtil.success(201, {
+      link_id: linkId,
+      full_link: link,
+      short_link: `https://p3ip1pz49f.execute-api.eu-central-1.amazonaws.com/dev/${shortLink}`,
+    });
   } catch (error: any) {
     console.error(error);
     return MessageUtil.error(error.code, error.message);

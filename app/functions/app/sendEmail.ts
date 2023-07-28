@@ -10,7 +10,6 @@ export const handler = async (event: any) => {
   try {
     const { body } = event.Records[0];
     const { message, email } = JSON.parse(body);
-    console.log(body, 1);
 
     const listIdentitiesResponse = await sesClient.send(
       new ListIdentitiesCommand({})
@@ -22,9 +21,6 @@ export const handler = async (event: any) => {
       await sesClient.send(
         new VerifyEmailIdentityCommand({ EmailAddress: email })
       );
-      console.log(`Email ${email} has been verified.`);
-    } else {
-      console.log(`Email ${email} is already verified.`);
     }
 
     const emailParams = {
@@ -38,7 +34,7 @@ export const handler = async (event: any) => {
           },
         },
         Subject: {
-          Data: "Notification - Post Deactivation",
+          Data: "Notification about shortlink deactivation",
         },
       },
       Source: email,

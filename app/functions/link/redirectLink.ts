@@ -50,29 +50,29 @@ export const handler = async (event: any) => {
         },
         body: "",
       };
-    } else {
-      const updateCommandForIncrementRedirectCount = new UpdateItemCommand({
-        TableName: process.env.LINKS_TABLE!,
-        Key: {
-          id: { S: linkInfo.Items![0].id.S! },
-        },
-        UpdateExpression: "SET click_count = :click_count",
-        ExpressionAttributeValues: {
-          ":click_count": { N: `${+linkInfo.Items![0].click_count.N! + 1}` },
-        },
-        ReturnValues: "ALL_NEW",
-      });
-
-      await dynamoDb.send(updateCommandForIncrementRedirectCount);
-
-      return {
-        statusCode: 302,
-        headers: {
-          Location: String(fullLink),
-        },
-        body: "",
-      };
     }
+
+    const updateCommandForIncrementRedirectCount = new UpdateItemCommand({
+      TableName: process.env.LINKS_TABLE!,
+      Key: {
+        id: { S: linkInfo.Items![0].id.S! },
+      },
+      UpdateExpression: "SET click_count = :click_count",
+      ExpressionAttributeValues: {
+        ":click_count": { N: `${+linkInfo.Items![0].click_count.N! + 1}` },
+      },
+      ReturnValues: "ALL_NEW",
+    });
+
+    await dynamoDb.send(updateCommandForIncrementRedirectCount);
+
+    return {
+      statusCode: 302,
+      headers: {
+        Location: String(fullLink),
+      },
+      body: "",
+    };
   } catch (error: any) {
     console.error(error);
     return MessageUtil.error(error.number, error.message);
