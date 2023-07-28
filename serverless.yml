@@ -215,6 +215,24 @@ functions:
           - !GetAtt UsersTable.Arn
           - !GetAtt TokensTable.Arn
 
+  showme:
+    handler: app/functions/app/me.handler
+    events:
+      - http:
+          method: GET
+          path: /me
+          cors: true
+          authorizer:
+            name: verify-token
+            identitySource: method.request.header.Authorization
+            resultTtlInSeconds: 60
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - "dynamodb:*"
+        Resource:
+          - !GetAtt LinksTable.Arn
+
   createlink:
     handler: app/functions/link/createLink.handler
     events:
@@ -225,6 +243,7 @@ functions:
           authorizer:
             name: verify-token
             identitySource: method.request.header.Authorization
+            resultTtlInSeconds: 60
     iamRoleStatements:
       - Effect: Allow
         Action:
@@ -265,6 +284,7 @@ functions:
           authorizer:
             name: verify-token
             identitySource: method.request.header.Authorization
+            resultTtlInSeconds: 60
     environment:
       USERS_TABLE: users
       LINKS_TABLE: links
