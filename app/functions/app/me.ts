@@ -19,6 +19,10 @@ export const handler = async (event: any) => {
 
     const userLinks = await dynamoDb.send(ScanCommandForFindingUserLinks);
 
+    if (userLinks.Count! < 1) {
+      return MessageUtil.error(404, { message: "User not found" });
+    }
+
     const userLinksFormated = userLinks.Items!.map((linkInfo: any) => {
       return {
         id: linkInfo.id.S,

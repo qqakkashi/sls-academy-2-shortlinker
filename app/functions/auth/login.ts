@@ -23,10 +23,9 @@ export const handler = async (event: any) => {
     const candidateUser = await dynamoDb.send(scanCommandToFindCandidateUser);
 
     if (candidateUser.Count! < 1) {
-      throw {
-        code: 400,
+      return MessageUtil.error(409, {
         message: `No user with email:${email}, please check your email`,
-      };
+      });
     }
 
     const userHashedPassword = candidateUser.Items![0].password.S!;
@@ -36,10 +35,9 @@ export const handler = async (event: any) => {
     const comparePasswords = bcrypt.compareSync(password, userHashedPassword);
 
     if (!comparePasswords) {
-      throw {
-        code: 400,
+      return MessageUtil.error(409, {
         message: `Password for email:${email} is incorrecnt`,
-      };
+      });
     }
     const tokens = generateTokens({
       uuid: userId,
